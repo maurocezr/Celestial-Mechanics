@@ -1,0 +1,11 @@
+# Comments start with a hash symbol (#)
+# Blank lines are ignored
+
+# Ignore the 'plan/' directory and all files within it
+plans/
+
+# Ignore the 'simulations/' directory and all files within it
+simulations/
+
+# Ignore the '__pycache__/' directory and all files within it
+__pycache__/
