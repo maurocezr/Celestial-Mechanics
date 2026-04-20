@@ -19,6 +19,30 @@ from relativity import (
 
 
 class TwoPNBackendTests(unittest.TestCase):
+    def test_adm_2pn_rhs_regression_fixed_state(self):
+        relative_position = np.asarray([2.3e-3, -4.1e-4, 2.0e-6], dtype=np.float64)
+        relative_momentum = np.asarray([-13.0, 142.0, -3.5e-3], dtype=np.float64)
+        masses = np.asarray([1.338185, 1.248868], dtype=np.float64)
+        G = 4.0 * np.pi * np.pi
+        c = 63239.7263
+
+        dr_dt, dp_dt = two_body_adm_2pn_rhs(relative_position, relative_momentum, masses, G, c)
+        reduced_h = two_body_adm_2pn_reduced_hamiltonian(relative_position, relative_momentum, masses, G, c)
+
+        expected_dr_dt = np.asarray(
+            [-20.123175092607454, 219.8086752688857, -0.005417683720752411],
+            dtype=np.float64,
+        )
+        expected_dp_dt = np.asarray(
+            [-11900398.761117725, 2121365.9029187006, -10348.173368125999],
+            dtype=np.float64,
+        )
+        expected_reduced_h = -19354.813927569365
+
+        self.assertTrue(np.allclose(dr_dt, expected_dr_dt, rtol=1e-13, atol=1e-13))
+        self.assertTrue(np.allclose(dp_dt, expected_dp_dt, rtol=1e-13, atol=1e-13))
+        self.assertAlmostEqual(float(reduced_h), expected_reduced_h, places=12)
+
     def test_analytic_2pn_rhs_matches_finite_difference_hamiltonian_gradients(self):
         masses = np.asarray([1.338185, 1.248868], dtype=np.float64)
         G = 4.0 * np.pi * np.pi

@@ -4,6 +4,9 @@
 # Ignore the 'plan/' directory and all files within it
 plans/
 
+# Ignore the 'plan/' directory and all files within it
+completed/
+
 # Ignore the 'simulations/' directory and all files within it
 simulations/
 

@@ -18,7 +18,7 @@ energy diagnostics, periapsis/precession analysis tools, and a simple CLI.
 - Relativistic bridge support:
   - `1PN` force model for exact two-body, central-body, and EIH experiments
   - `2PN` canonical ADM two-body backend plus a three-body milestone Hamiltonian path
-  - `2.5PN` leading two-body radiation-reaction model for inspiral experiments
+  - `2.5PN` complete two-body harmonic model through Newtonian + `1PN` + `2PN` + `2.5PN`
   - Mercury-style preset for perihelion precession studies
   - compact-binary toy preset for stronger relativistic orbital deviations
   - inner-solar-system toy preset for central-body `1PN` experiments
@@ -57,7 +57,7 @@ energy diagnostics, periapsis/precession analysis tools, and a simple CLI.
   - exact canonical ADM two-body evolution in the center-of-mass frame
   - explicit ADM three-body Hamiltonian support via numerical Hamilton equations
 - `2.5PN` currently means:
-  - leading dissipative two-body radiation reaction added on top of the force-based two-body `1PN` model
+  - a force-based two-body harmonic model through Newtonian + `1PN` + `2PN` + `2.5PN`
   - useful for inspiral experiments, but still less mature than the `1PN` validation tooling
 - `fit_double_pulsar_2pn.py` now builds a direct canonical `2PN` Double Pulsar initial state from
   the published orbital parameters and the Hamiltonian velocity-to-momentum inversion.
@@ -129,7 +129,7 @@ Mercury run with canonical ADM `2PN` two-body dynamics:
 python nbody.py --preset mercury-relativistic --gravity-model 2pn --pn-scope two-body --integrator rk4 --c 63239.7263 --years 0.05 --dt 0.0002 --no-plot
 ```
 
-Compact-binary toy run with leading two-body `2.5PN` radiation reaction:
+Compact-binary toy run with the complete two-body harmonic `2.5PN` force model:
 ```bash
 python nbody.py --preset binary-pulsar-toy --gravity-model 2.5pn --pn-scope two-body --integrator rk4 --c 63239.7263 --years 0.05 --dt 0.00001 --no-plot
 ```
@@ -406,10 +406,11 @@ python nbody.py --preset ephemeris --ephemeris-source horizons --horizons-target
   - a central-body approximation in which one designated primary sources the relativistic correction
   - a full harmonic-coordinate Einstein-Infeld-Hoffmann (`eih`) N-body mode
 - `--gravity-model 2pn` now supports an exact canonical ADM two-body backend in the center-of-mass frame.
-- `--gravity-model 2.5pn` adds the leading dissipative two-body radiation-reaction term on top of the current Newtonian + two-body `1PN` conservative force model.
+- `--gravity-model 2.5pn` now evaluates the complete scoped two-body harmonic force model through Newtonian + `1PN` + `2PN` + `2.5PN`.
 - Milestone 1 of the many-body path is also implemented: the explicit ADM three-body `2PN` Hamiltonian is available through the canonical backend using numerical Hamilton equations.
 - Broader many-body `2PN` (`N > 3`) is still not implemented, but the runtime is isolated from the validated force-based regimes and includes a tested canonical phase-space RK4 scaffold.
-- The current `2.5PN` path is limited to `--pn-scope two-body` and uses a bookkeeping `1PN` energy diagnostic because radiation reaction is dissipative.
+- The standalone two-body `1PN` force path and the ADM canonical `2PN` backend remain separate implementations; the `2.5PN` branch does not replace either of them.
+- The current `2.5PN` path is limited to `--pn-scope two-body`, still uses a bookkeeping `1PN` energy diagnostic because radiation reaction is dissipative, and should be treated as a controlled compact-binary experiment rather than a precision timing model.
 - Use `--pn-scope two-body` for exact two-body experiments, `--pn-scope central-body --pn-primary-index 0` for primary-sourced approximations, and `--pn-scope eih` for full `1PN` N-body experiments.
 - The recommended starting preset is `--preset mercury-relativistic`.
 - The right-hand plot panel shows Newtonian `dE/E0` for Newtonian runs and a two-body `1PN` total-energy drift for `1PN` runs.
@@ -464,7 +465,7 @@ Compact-binary status:
 - The built-in pulsar presets reproduce the standard `1PN`/EIH periastron-advance scale well enough for validation work.
 - The Double Pulsar `1PN` EIH run remains the cleanest compact-binary validation target in the current codebase.
 - The current `2PN` and `2.5PN` compact-binary workflows should be interpreted as controlled theory experiments rather than full timing-model reproductions.
-- In particular, the present `2.5PN` Double Pulsar inspiral path gets the correct sign and order of magnitude for `\dot P_b`, but it is not yet a precision-grade timing-model implementation.
+- In particular, the present `2.5PN` path now includes the missing harmonic conservative `2PN` sector and still gets the correct dissipative sign in short compact-binary runs, but it is not yet a precision-grade timing-model implementation.
 
 
 ## Performance Considerations

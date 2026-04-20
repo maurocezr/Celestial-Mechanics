@@ -142,6 +142,85 @@ def _pairwise_geometry(positions: Array, eps: float) -> tuple[Array, Array, Arra
     return diff, dist, inv_dist, unit_ba
 
 
+def _two_body_relative_kinematics(
+    positions: Array,
+    velocities: Array,
+    masses: Array,
+    G: float,
+) -> tuple[float, float, float, float, Array, Array, float, Array, float, float, float]:
+    m1, m2 = masses
+    total_mass = m1 + m2
+    if total_mass <= 0.0:
+        raise ValueError("Total system mass must be positive")
+
+    rel_pos = positions[1] - positions[0]
+    rel_vel = velocities[1] - velocities[0]
+    radius = float(np.linalg.norm(rel_pos))
+    if radius == 0.0:
+        raise ValueError("Post-Newtonian correction is undefined for zero separation")
+
+    rhat = rel_pos / radius
+    radial_velocity = float(np.dot(rel_pos, rel_vel)) / radius
+    speed2 = float(np.dot(rel_vel, rel_vel))
+    eta = (m1 * m2) / (total_mass * total_mass)
+    gm = G * total_mass
+    return m1, m2, total_mass, eta, rel_pos, rel_vel, radius, rhat, radial_velocity, speed2, gm
+
+
+def _relative_to_barycentric_correction(rel_correction: Array, m1: float, m2: float, total_mass: float) -> Array:
+    return np.asarray(
+        [
+            -(m2 / total_mass) * rel_correction,
+            (m1 / total_mass) * rel_correction,
+        ],
+        dtype=np.float64,
+    )
+
+
+def _two_body_harmonic_2pn_acceleration(
+    positions: Array,
+    velocities: Array,
+    masses: Array,
+    G: float,
+    c: float,
+) -> Array:
+    """Return the DIRE harmonic-coordinate two-body 2PN correction.
+
+    This helper is intentionally private and is used only to complete the
+    existing `2.5pn` path without altering the standalone `1pn` or ADM `2pn`
+    implementations.
+    """
+    m1, m2, total_mass, eta, rel_pos, rel_vel, radius, _, radial_velocity, speed2, gm = _two_body_relative_kinematics(
+        positions,
+        velocities,
+        masses,
+        G,
+    )
+
+    radial_velocity2 = radial_velocity * radial_velocity
+    speed4 = speed2 * speed2
+    radial_velocity4 = radial_velocity2 * radial_velocity2
+    gm_over_r = gm / radius
+
+    a_2pn = (
+        -eta * (3.0 - 4.0 * eta) * speed4
+        + 0.5 * eta * (13.0 - 4.0 * eta) * speed2 * gm_over_r
+        + 1.5 * eta * (3.0 - 4.0 * eta) * speed2 * radial_velocity2
+        + (2.0 + 25.0 * eta + 2.0 * eta * eta) * radial_velocity2 * gm_over_r
+        - 1.875 * eta * (1.0 - 3.0 * eta) * radial_velocity4
+        - 0.75 * (12.0 + 29.0 * eta) * gm_over_r * gm_over_r
+    )
+    b_2pn = (
+        0.5 * eta * (15.0 + 4.0 * eta) * speed2
+        - 1.5 * eta * (3.0 + 2.0 * eta) * radial_velocity2
+        - 0.5 * (4.0 + 41.0 * eta + 8.0 * eta * eta) * gm_over_r
+    )
+
+    coeff = gm / (c**4 * radius**3)
+    rel_correction = coeff * (a_2pn * rel_pos + b_2pn * radial_velocity * radius * rel_vel)
+    return _relative_to_barycentric_correction(rel_correction, m1, m2, total_mass)
+
+
 def post_newtonian_1pn_acceleration(
     positions: Array,
     velocities: Array,
@@ -170,21 +249,12 @@ def post_newtonian_1pn_acceleration(
 
     del eps
 
-    m1, m2 = masses
-    total_mass = m1 + m2
-    if total_mass <= 0.0:
-        raise ValueError("Total system mass must be positive")
-
-    rel_pos = positions[1] - positions[0]
-    rel_vel = velocities[1] - velocities[0]
-    radius = float(np.linalg.norm(rel_pos))
-    if radius == 0.0:
-        raise ValueError("1PN correction is undefined for zero separation")
-
-    radial_velocity = float(np.dot(rel_pos, rel_vel)) / radius
-    speed2 = float(np.dot(rel_vel, rel_vel))
-    mu = G * total_mass
-    eta = (m1 * m2) / (total_mass * total_mass)
+    m1, m2, total_mass, eta, rel_pos, rel_vel, radius, _, radial_velocity, speed2, mu = _two_body_relative_kinematics(
+        positions,
+        velocities,
+        masses,
+        G,
+    )
 
     # Relative 1PN correction for a comparable-mass binary in harmonic coordinates.
     coeff = mu / (c * c * radius**3)
@@ -200,13 +270,7 @@ def post_newtonian_1pn_acceleration(
 
     # Convert the relative correction into barycentric accelerations that preserve
     # the center-of-mass relation m1*a1 + m2*a2 = 0.
-    return np.asarray(
-        [
-            -(m2 / total_mass) * rel_correction,
-            (m1 / total_mass) * rel_correction,
-        ],
-        dtype=np.float64,
-    )
+    return _relative_to_barycentric_correction(rel_correction, m1, m2, total_mass)
 
 
 def central_body_1pn_correction(
@@ -348,32 +412,19 @@ def post_newtonian_2p5pn_acceleration(
     if c <= 0.0:
         raise ValueError("The effective speed of light c must be positive for 2.5PN corrections")
 
-    m1, m2 = masses
-    total_mass = m1 + m2
-    eta = (m1 * m2) / (total_mass * total_mass)
-    rel_pos = positions[1] - positions[0]
-    rel_vel = velocities[1] - velocities[0]
-    radius = float(np.linalg.norm(rel_pos))
-    if radius == 0.0:
-        raise ValueError("2.5PN correction is undefined for zero separation")
-
-    rhat = rel_pos / radius
-    radial_velocity = float(np.dot(rel_pos, rel_vel)) / radius
-    speed2 = float(np.dot(rel_vel, rel_vel))
-    gm = G * total_mass
+    m1, m2, total_mass, eta, _, rel_vel, radius, rhat, radial_velocity, speed2, gm = _two_body_relative_kinematics(
+        positions,
+        velocities,
+        masses,
+        G,
+    )
 
     coeff = (8.0 / 5.0) * eta * gm * gm / (c**5 * radius**3)
     rel_correction = coeff * (
         radial_velocity * (3.0 * speed2 + (17.0 / 3.0) * gm / radius) * rhat
         - (speed2 + 3.0 * gm / radius) * rel_vel
     )
-    return np.asarray(
-        [
-            -(m2 / total_mass) * rel_correction,
-            (m1 / total_mass) * rel_correction,
-        ],
-        dtype=np.float64,
-    )
+    return _relative_to_barycentric_correction(rel_correction, m1, m2, total_mass)
 
 
 def combined_2p5pn_acceleration(
@@ -396,6 +447,12 @@ def combined_2p5pn_acceleration(
         c,
         scope=scope,
         primary_index=primary_index,
+    ) + _two_body_harmonic_2pn_acceleration(
+        positions,
+        velocities,
+        masses,
+        G,
+        c,
     ) + post_newtonian_2p5pn_acceleration(
         positions,
         velocities,
